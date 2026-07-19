@@ -28,6 +28,96 @@ Có **2 cách nạp**:
 
 ---
 
+## 1B. Sơ đồ đấu nối mạch (board DIY `bread-compact-wifi`)
+
+Phần này dành cho ai **tự lắp mạch trên breadboard** với ESP32-S3 + micro I2S + loa I2S. Các số chân dưới đây lấy **trực tiếp từ mã nguồn firmware** `main/boards/bread-compact-wifi/config.h` (chế độ I2S Simplex). Nếu bạn dùng board khác, số chân sẽ khác — xem mục ["Board khác thì tra chân ở đâu"](#board-khác-thì-tra-chân-ở-đâu) bên dưới.
+
+### Linh kiện
+- 1× ESP32-S3 DevKit (ví dụ ESP32-S3-DevKitC / N16R8).
+- 1× Micro I2S MEMS **INMP441** (ngõ vào âm thanh).
+- 1× Module khuếch đại I2S **MAX98357A** + 1 loa 4–8Ω (ngõ ra âm thanh).
+- (Tuỳ chọn) 1× màn hình OLED **SSD1306** I2C 128×32 hoặc 128×64.
+- Dây cắm breadboard.
+
+### Bảng đấu nối chân
+
+**Micro INMP441 → ESP32-S3** (I2S vào):
+
+| INMP441 | ESP32-S3 | Ghi chú |
+|---|---|---|
+| VDD | 3V3 | Cấp nguồn 3.3V |
+| GND | GND | |
+| SD  | GPIO6 | Dữ liệu mic (MIC DIN) |
+| WS / LRCL | GPIO4 | Word select |
+| SCK / BCLK | GPIO5 | Bit clock |
+| L/R | GND | Nối GND = kênh trái |
+
+**Khuếch đại MAX98357A → ESP32-S3** (I2S ra):
+
+| MAX98357A | ESP32-S3 | Ghi chú |
+|---|---|---|
+| Vin | 5V (VBUS) | Cấp nguồn (3.3V cũng chạy, 5V kêu to hơn) |
+| GND | GND | |
+| DIN | GPIO7 | Dữ liệu loa (SPK DOUT) |
+| BCLK | GPIO15 | Bit clock |
+| LRC | GPIO16 | Word select (LRCK) |
+| Speaker + / − | Loa | Nối 2 cực loa |
+
+**Màn hình OLED SSD1306 (I2C — tuỳ chọn) → ESP32-S3:**
+
+| OLED | ESP32-S3 | Ghi chú |
+|---|---|---|
+| VCC | 3V3 | |
+| GND | GND | |
+| SDA | GPIO41 | |
+| SCL | GPIO42 | |
+
+**Nút bấm / LED tích hợp (đã định nghĩa sẵn trong firmware, lắp nếu cần):**
+
+| Chức năng | ESP32-S3 | Ghi chú |
+|---|---|---|
+| Nút BOOT | GPIO0 | Thường có sẵn trên DevKit |
+| Nút cảm ứng (Touch) | GPIO47 | Tuỳ chọn |
+| Tăng âm lượng | GPIO40 | Nút nhấn xuống GND |
+| Giảm âm lượng | GPIO39 | Nút nhấn xuống GND |
+| LED RGB tích hợp | GPIO48 | WS2812 trên DevKit |
+
+### Sơ đồ khối
+
+```
+                         ESP32-S3 DevKit
+                       ┌────────────────────┐
+   INMP441 (MIC)       │                    │      MAX98357A (AMP) ── Loa
+   ┌──────────┐        │                    │      ┌──────────┐
+   │ VDD ─────┼── 3V3 ─┤ 3V3           5V  ─┼── Vin┤          │
+   │ GND ─────┼── GND ─┤ GND          GND  ─┼── GND┤          │
+   │ SD  ─────┼─ GPIO6 ┤ 6                7 ┼─ DIN─┤ DIN      │
+   │ WS  ─────┼─ GPIO4 ┤ 4               15 ┼─BCLK─┤ BCLK  +──┼── Loa+
+   │ SCK ─────┼─ GPIO5 ┤ 5               16 ┼─LRC ─┤ LRC   −──┼── Loa−
+   │ L/R ─────┼── GND  │                    │      └──────────┘
+   └──────────┘        │ 41(SDA) 42(SCL)    │
+                       │   │        │       │
+                       └───┼────────┼───────┘
+                           │        │
+                      OLED SDA   OLED SCL  (3V3/GND cấp riêng)
+
+   USB ── cáp dữ liệu ── PC   (vừa cấp nguồn 5V vừa để nạp/monitor)
+```
+
+Lưu ý đấu nối:
+- **Chung GND**: tất cả GND (ESP32, mic, amp, OLED, loa) phải nối chung.
+- **Không cấp nhầm điện áp**: INMP441 và OLED dùng **3V3**; MAX98357A nên dùng **5V** (chân 5V/VBUS của DevKit) để loa kêu to, nhưng 3V3 vẫn chạy.
+- Khi mới lắp, có thể bỏ OLED và các nút âm lượng — chỉ cần mic + loa là đã nói chuyện được (chọn cấu hình không màn hình khi build nếu muốn).
+
+### Board khác thì tra chân ở đâu
+Mỗi loại board có file định nghĩa chân riêng trong repo firmware [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32):
+```
+main/boards/<tên-board>/config.h
+```
+Mở đúng thư mục board của bạn (ví dụ `lichuang-dev`, `esp-box-3`, `waveshare`...) để xem `AUDIO_I2S_*_GPIO_*`, `DISPLAY_*_PIN`, `*_BUTTON_GPIO`. **Tuyệt đối không tự đổi chân trong firmware** để khớp mạch của bạn (theo `AGENTS.md`, việc đó ảnh hưởng tương thích OTA) — hãy đấu mạch theo đúng chân mà board đã định nghĩa.
+
+---
+
 ## 2. Kết nối phần cứng với máy tính
 
 1. **Cắm cáp USB** từ board vào máy tính.
