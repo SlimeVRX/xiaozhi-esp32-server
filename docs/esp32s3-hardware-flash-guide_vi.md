@@ -11,6 +11,42 @@ Có **2 cách nạp**:
 
 ---
 
+## 0. Đi thẳng cho cấu hình của bạn (ESP32-S3 N16R8 + INMP441 + MAX98357A, KHÔNG màn, KHÔNG nút, tiếng Việt, nạp qua trình duyệt)
+
+Đây là quy trình đầy đủ, đúng thứ tự cho đúng cấu hình bạn mô tả. Các mục 1–4 bên dưới là bản giải thích chi tiết hơn.
+
+**Điểm mấu chốt cần hiểu trước:**
+- **Ngôn ngữ hội thoại (nghe/nói tiếng Việt) do SERVER quyết định**, KHÔNG phải firmware. Firmware chỉ chuyển âm thanh; việc nhận dạng (ASR), suy nghĩ (LLM) và đọc (TTS) tiếng Việt là do bạn cấu hình ở `xiaozhi-esp32-server`. → Bạn KHÔNG cần một firmware "tiếng Việt" riêng; firmware biên dịch sẵn (mặc định) là đủ.
+- **Không có màn hình**: chọn board type `bread-compact-wifi` khi nạp. Không cắm OLED thì firmware vẫn chạy bình thường (chỉ là không hiển thị gì).
+- **Không có nút ngoài**: vẫn ổn — đánh thức bằng **từ khoá giọng nói (wake word)**, không cần nút. Riêng nút **BOOT/RST có sẵn trên chính board DevKit** dùng để reset/vào chế độ cấu hình khi cần (bạn không phải hàn thêm nút).
+- **Từ khoá đánh thức**: firmware biên dịch sẵn dùng wake word tiếng Trung/tiếng Anh có sẵn (ví dụ "你好小智" / "Hi, ESP"). Chưa có wake word tiếng Việt trong bản dựng sẵn. Sau khi đánh thức, bạn cứ **nói tiếng Việt bình thường** và server sẽ trả lời bằng tiếng Việt.
+
+**Các bước:**
+
+1. **Đấu mạch** theo đúng chân ở [mục 1B](#1b-sơ-đồ-đấu-nối-mạch-board-diy-bread-compact-wifi): INMP441 (WS=4, SCK=5, SD=6) và MAX98357A (DIN=7, BCLK=15, LRC=16), chung GND. Bỏ qua phần OLED và nút âm lượng.
+
+2. **Cài & chạy server `xiaozhi-esp32-server`** trước (bạn cần có **địa chỉ OTA** hoạt động). Xem [Deployment.md](./Deployment.md). Có 2 kiểu:
+   - *Triển khai đơn giản (chỉ Server)*: cấu hình bằng file `data/.config.yaml`.
+   - *Triển khai đầy đủ (có Web 智控台/bảng điều khiển)*: cấu hình bằng giao diện web, dễ hơn cho việc đặt tên/nhân vật/giọng.
+
+3. **Cấu hình tiếng Việt trên server** (xem [mục 5](#5-cấu-hình-tiếng-việt-tên-trợ-lý-trên-server)):
+   - **TTS (giọng đọc tiếng Việt)**: dùng `EdgeTTS` (miễn phí), đổi `voice` thành giọng Việt, ví dụ `vi-VN-HoaiMyNeural` (nữ) hoặc `vi-VN-NamMinhNeural` (nam).
+   - **ASR (nhận dạng tiếng Việt)**: model mặc định `FunASR/SenseVoice` **không có tiếng Việt** (chỉ zh/en/ja/ko/yue). Muốn nghe tiếng Việt chuẩn, chọn một ASR hỗ trợ tiếng Việt (ví dụ dịch vụ đám mây Aliyun/Doubao/Volcano có tham số `language`, hoặc một ASR nền Whisper).
+   - **Tên trợ lý + tính cách + trả lời tiếng Việt**: sửa `prompt` (persona) sang tiếng Việt, đặt tên trong đó (hoặc đặt trong bảng điều khiển web nếu dùng triển khai đầy đủ).
+
+4. **Nạp firmware biên dịch sẵn qua trình duyệt** (xem [Cách A](#cách-a--nạp-firmware-biên-dịch-sẵn-qua-trình-duyệt)):
+   - Cắm USB (cáp dữ liệu), mở Chrome/Edge vào https://espressif.github.io/esp-launchpad/ , Connect → chọn cổng → chọn firmware `bread-compact-wifi` (bản 1.6.1+), Flash.
+
+5. **Thiết lập WiFi + trỏ về server của bạn** (xem [mục 3B](#3b-cấu-hình-wifi-và-địa-chỉ-server-lần-đầu-bật)):
+   - Board bật lần đầu (chưa có WiFi) sẽ **tự phát WiFi cấu hình** tên kiểu `Xiaozhi-XXXX`. Kết nối điện thoại/PC vào WiFi đó → trang cấu hình tự mở.
+   - Chọn WiFi nhà bạn (2.4GHz), nhập mật khẩu. Vào **"Tùy chọn nâng cao / 高级选项"** → nhập **địa chỉ OTA** server của bạn (vd `http://192.168.1.25:8002/xiaozhi/ota/`) → Lưu → board khởi động lại.
+
+6. **Ghép thiết bị vào server (nếu dùng triển khai đầy đủ)**: lần đầu kết nối, server báo một **mã 6 số** (đọc qua loa / hiện trong log). Đăng nhập bảng điều khiển web → thêm thiết bị bằng mã đó → gán vào "agent" đã cấu hình tiếng Việt ở bước 3.
+
+7. **Kiểm tra**: nói wake word → nói một câu tiếng Việt → nghe trợ lời trả lời tiếng Việt; đồng thời xem log ở server.
+
+---
+
 ## 1. Chuẩn bị
 
 ### Phần cứng
@@ -212,6 +248,24 @@ File `build/merged-binary.bin` sinh ra chính là firmware để nạp qua ESP-L
 
 ---
 
+## 3B. Cấu hình WiFi và địa chỉ server (lần đầu bật)
+
+Áp dụng khi bạn nạp firmware biên dịch sẵn (Cách A) và muốn board trỏ về server tự host của mình.
+
+1. Sau khi nạp xong, cấp nguồn cho board (cắm USB). Vì **chưa có WiFi lưu sẵn**, board tự vào **chế độ cấu hình mạng** và phát ra một WiFi tên kiểu `Xiaozhi-XXXX`.
+2. Dùng điện thoại/máy tính **kết nối vào WiFi `Xiaozhi-XXXX`** đó. Trang cấu hình (captive portal) thường tự bật lên; nếu không, mở trình duyệt vào `http://192.168.4.1`.
+3. Trong trang cấu hình:
+   - Chọn **WiFi nhà bạn** (bắt buộc băng tần **2.4GHz**) và nhập mật khẩu.
+   - Bấm **"Tùy chọn nâng cao / 高级选项"**, nhập **địa chỉ OTA** của server bạn vào ô địa chỉ, ví dụ:
+     ```
+     http://192.168.1.25:8002/xiaozhi/ota/
+     ```
+     (thay bằng IP:cổng thật của server bạn — xem [firmware-setting.md](./firmware-setting.md), ảnh minh hoạ `docs/images/firmware-setting-ota.png`).
+   - Bấm **Lưu / Save**, board sẽ khởi động lại và tự kết nối WiFi + server.
+4. **Muốn đổi lại WiFi/địa chỉ sau này** (không có nút ngoài): dùng nút **BOOT** có sẵn trên DevKit để đưa board về chế độ cấu hình, hoặc xoá WiFi đã lưu rồi khởi động lại — board lại phát `Xiaozhi-XXXX`.
+
+---
+
 ## 3. Kiểm tra hoạt động
 
 1. Sau khi nạp + kết nối WiFi thành công, đọc **log serial** trên board (`idf.py monitor` hoặc terminal serial): board sẽ báo kết nối WiFi và kết nối tới server.
@@ -232,3 +286,54 @@ File `build/merged-binary.bin` sinh ra chính là firmware để nạp qua ESP-L
 | Nạp xong màn hình/log trắng | Nhấn nút **RST** một lần để board chạy firmware |
 
 Các câu hỏi khác xem thêm [FAQ.md](./FAQ.md).
+
+---
+
+## 5. Cấu hình tiếng Việt & tên trợ lý (trên server)
+
+Nhắc lại: **tiếng Việt được quyết định ở server**, không phải firmware. Bạn cần chỉnh 3 nhóm: TTS (giọng đọc), ASR (nhận dạng), và prompt/tên.
+
+### Nếu dùng "triển khai đơn giản" (sửa file `data/.config.yaml`)
+
+File cấu hình nằm ở `main/xiaozhi-server/data/.config.yaml` (copy từ `config.yaml` rồi ghi đè các mục cần đổi). Ví dụ:
+
+```yaml
+selected_module:
+  TTS: EdgeTTS        # giọng đọc
+  # ASR: ...          # xem lưu ý ASR tiếng Việt bên dưới
+
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: vi-VN-HoaiMyNeural   # giọng nữ Việt (hoặc vi-VN-NamMinhNeural = nam)
+
+# Tên + tính cách + yêu cầu trả lời tiếng Việt
+prompt: |
+  Bạn là một trợ lý ảo tên là "Bé Na", nói chuyện thân thiện, tự nhiên bằng tiếng Việt.
+  Luôn trả lời ngắn gọn, lịch sự và bằng tiếng Việt.
+```
+Lưu file rồi **khởi động lại** `xiaozhi-server`.
+
+> Đổi **tên trợ lý** = đổi tên trong `prompt`. Đổi **giọng** = đổi `voice`. Đổi **giọng nói/độ dài trả lời** = sửa nội dung `prompt`.
+
+### Nếu dùng "triển khai đầy đủ" (Web 智控台 / bảng điều khiển)
+
+1. Đăng nhập bảng điều khiển bằng tài khoản **super admin**.
+2. Vào phần **Agent/Vai trò (角色)** → tạo/sửa một agent:
+   - **Tên trợ lý**: đặt tên tuỳ ý.
+   - **Prompt/nhân vật**: viết bằng tiếng Việt như ví dụ trên.
+   - **TTS**: chọn `EdgeTTS`, đặt giọng `vi-VN-HoaiMyNeural` / `vi-VN-NamMinhNeural`.
+   - **ASR / LLM**: chọn model (xem lưu ý ASR bên dưới).
+3. Ở **参数管理 / Quản lý tham số** đảm bảo `server.websocket` đã đúng.
+4. Sau khi ghép thiết bị (mã 6 số ở bước 6 mục 0), **gán thiết bị vào agent** này.
+
+### Lưu ý quan trọng về ASR tiếng Việt
+- Model mặc định **`FunASR`/`SenseVoice` KHÔNG hỗ trợ tiếng Việt** (chỉ zh, en, ja, ko, yue). Nếu để mặc định, tiếng Việt của bạn sẽ bị nhận dạng sai/ra ký tự lạ.
+- Để nghe hiểu tiếng Việt, chọn một ASR có tiếng Việt, ví dụ:
+  - ASR đám mây có tham số `language` đặt về tiếng Việt (Aliyun / Doubao / Volcano...), hoặc
+  - ASR nền **Whisper** (hỗ trợ đa ngôn ngữ gồm tiếng Việt).
+- Các ASR đám mây cần API key — bạn khai báo key trong cùng file `.config.yaml` (hoặc trong bảng điều khiển) ở mục ASR tương ứng.
+
+### TTS EdgeTTS — vì sao khuyên dùng
+- Miễn phí, không cần API key, có sẵn nhiều giọng Việt tự nhiên (`vi-VN-HoaiMyNeural`, `vi-VN-NamMinhNeural`).
+- Chỉ cần đổi `voice` là ra tiếng Việt ngay.
