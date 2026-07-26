@@ -337,3 +337,83 @@ Lưu file rồi **khởi động lại** `xiaozhi-server`.
 ### TTS EdgeTTS — vì sao khuyên dùng
 - Miễn phí, không cần API key, có sẵn nhiều giọng Việt tự nhiên (`vi-VN-HoaiMyNeural`, `vi-VN-NamMinhNeural`).
 - Chỉ cần đổi `voice` là ra tiếng Việt ngay.
+
+---
+
+## 6. Dựng server đơn giản (Docker — chỉ chạy Server)
+
+Đây là cách nhẹ nhất: chỉ chạy module `xiaozhi-server` bằng Docker, cấu hình bằng 1 file `.config.yaml`, **không cần Web/CSDL**. Chi tiết gốc: [Deployment.md](./Deployment.md) (方式一).
+
+> **Kiến trúc CPU**: image Docker phát hành (0.8.2+) chỉ hỗ trợ **x86**. Nếu máy bạn là **ARM64**, phải tự build image theo [docker-build.md](./docker-build.md).
+
+### B1. Cài Docker
+Cài Docker + Docker Compose cho hệ điều hành của bạn (Windows/macOS: Docker Desktop; Linux: docker engine).
+
+### B2. Tạo thư mục
+```
+xiaozhi-server/
+  ├─ data/
+  └─ models/
+      └─ SenseVoiceSmall/
+```
+
+### B3. Tải model nhận dạng giọng nói (ASR mặc định — offline)
+Tải file `model.pt` của **SenseVoiceSmall** rồi đặt vào `models/SenseVoiceSmall/model.pt`:
+- ModelScope: https://modelscope.cn/models/iic/SenseVoiceSmall/resolve/master/model.pt
+
+> Lưu ý: SenseVoice **không nhận dạng tiếng Việt** (chỉ zh/en/ja/ko/yue). Vẫn cần file này để server khởi động được; muốn nghe hiểu tiếng Việt thì đổi ASR sang loại hỗ trợ tiếng Việt (xem [mục 5](#5-cấu-hình-tiếng-việt--tên-trợ-lý-trên-server)).
+
+### B4. Tải file cấu hình
+1. Tải `docker-compose.yml` (từ `main/xiaozhi-server/docker-compose.yml` trong repo, bấm **RAW → download**) đặt vào `xiaozhi-server/`.
+2. Tải `config.yaml` (từ `main/xiaozhi-server/config.yaml`) đặt vào `xiaozhi-server/data/`, rồi **đổi tên thành `.config.yaml`**.
+
+Cấu trúc cuối cùng:
+```
+xiaozhi-server/
+  ├─ docker-compose.yml
+  ├─ data/
+  │   └─ .config.yaml
+  └─ models/
+      └─ SenseVoiceSmall/
+          └─ model.pt
+```
+
+### B5. Sửa `.config.yaml` tối thiểu (đã kèm tiếng Việt)
+```yaml
+server:
+  websocket: ws://192.168.1.25:8000/xiaozhi/v1/   # thay bằng IP LAN máy chạy server
+
+selected_module:
+  LLM: ChatGLMLLM      # LLM mặc định (miễn phí, nhưng cần đăng ký key)
+  TTS: EdgeTTS         # giọng đọc miễn phí, có tiếng Việt
+
+LLM:
+  ChatGLMLLM:
+    api_key: xxxxxxxxxxxxxxxx.xxxxxx   # lấy key ở https://bigmodel.cn/usercenter/proj-mgmt/apikeys
+
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: vi-VN-HoaiMyNeural
+
+prompt: |
+  Bạn là một trợ lý ảo tên là "Bé Na", nói chuyện thân thiện, tự nhiên bằng tiếng Việt.
+  Luôn trả lời ngắn gọn, lịch sự và bằng tiếng Việt.
+```
+Nguyên tắc: `.config.yaml` chỉ cần ghi những mục bạn muốn ghi đè; mục nào thiếu, hệ thống tự đọc từ `config.yaml` gốc.
+
+### B6. Chạy server
+Từ trong thư mục `xiaozhi-server/`:
+```bash
+docker compose up -d
+docker logs -f xiaozhi-esp32-server
+```
+
+### B7. Xác định địa chỉ (RẤT quan trọng cho việc cấu hình board)
+Với Docker, địa chỉ in trong log **không phải** địa chỉ thật. Hãy tính theo **IP LAN** của máy chạy server. Ví dụ IP là `192.168.1.25`:
+- WebSocket: `ws://192.168.1.25:8000/xiaozhi/v1/`
+- **Địa chỉ OTA (điền vào board ở [mục 3B](#3b-cấu-hình-wifi-và-địa-chỉ-server-lần-đầu-bật))**: `http://192.168.1.25:8003/xiaozhi/ota/`
+
+> Với triển khai đơn giản này, cổng OTA là **8003** (khác với triển khai đầy đủ dùng 8002).
+
+Mở `http://192.168.1.25:8003/xiaozhi/ota/` bằng trình duyệt: nếu báo "OTA接口运行正常 / OTA interface running normally" là server đã sẵn sàng. Giờ quay lại [mục 3B](#3b-cấu-hình-wifi-và-địa-chỉ-server-lần-đầu-bật) để trỏ board về địa chỉ OTA này.
